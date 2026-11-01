@@ -1,7 +1,25 @@
-
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
+
+
+class User(db.Model):
+    """
+    Temporary User model.
+    We will align this with Member 1's database model later.
+    """
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+
+    expenses = db.relationship(
+        "Expense",
+        backref="user",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
 
 
 class Expense(db.Model):

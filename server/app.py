@@ -1,17 +1,18 @@
 from flask import Flask, jsonify
 from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
 
+from config import Config
 from models import db
 from resources.expense import expense_bp
 
 
 app = Flask(__name__)
-
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///expense_tracker.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = "change-this-to-a-secure-secret-key"
+app.config.from_object(Config)
 
 db.init_app(app)
+
+jwt = JWTManager(app)
 migrate = Migrate(app, db)
 
 app.register_blueprint(expense_bp)
@@ -21,7 +22,7 @@ app.register_blueprint(expense_bp)
 def home():
     return jsonify({
         "message": "Personal Expense Tracker API is running."
-    })
+    }), 200
 
 
 if __name__ == "__main__":

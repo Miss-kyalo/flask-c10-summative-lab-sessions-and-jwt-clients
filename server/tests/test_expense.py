@@ -2,20 +2,23 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 SERVER_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVER_DIR))
 
+import pytest
+from flask_jwt_extended import create_access_token
+
 from app import app
-from models import db, User, Expense
+from models import db, User
+
 
 @pytest.fixture
 def client():
     app.config.update(
         TESTING=True,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        SECRET_KEY="test-secret-key"
+        SECRET_KEY="test-secret-key",
+        JWT_SECRET_KEY="test-jwt-secret-key"
     )
 
     with app.app_context():
@@ -33,33 +36,36 @@ def client():
         db.session.add_all([user1, user2])
         db.session.commit()
 
-        user1_id = user1.id
-        user2_id = user2.id
+        token1 = create_access_token(identity=str(user1.id))
+        token2 = create_access_token(identity=str(user2.id))
 
     with app.test_client() as test_client:
-        yield test_client, user1_id, user2_id
+        yield test_client, token1, token2
 
     with app.app_context():
         db.session.remove()
         db.drop_all()
 
 
-def login_as(client, user_id):
-    with client.session_transaction() as session:
-        session["user_id"] = user_id
+def auth_headers(token):
+    return {"Authorization": f"Bearer {token}"}
 
 
-def create_test_expense(client):
-    return client.post("/expenses", json={
-        "description": "Lunch",
-        "amount": 500,
-        "category": "Food",
-        "date": "2026-11-01"
-    })
+def create_test_expense(client, token):
+    return client.post(
+        "/expenses",
+        json={
+            "description": "Lunch",
+            "amount": 500,
+            "category": "Food",
+            "date": "2026-11-01"
+        },
+        headers=auth_headers(token)
+    )
 
 
 def test_unauthenticated_user_cannot_access_expenses(client):
-    test_client, user1_id, user2_id = client
+    test_client, token1, token2 = client
 
     response = test_client.get("/expenses")
 
@@ -67,38 +73,39 @@ def test_unauthenticated_user_cannot_access_expenses(client):
 
 
 def test_create_expense(client):
-    test_client, user1_id, user2_id = client
-    login_as(test_client, user1_id)
+    test_client, token1, token2 = client
 
-    response = create_test_expense(test_client)
+    response = create_test_expense(test_client, token1)
 
     assert response.status_code == 201
     assert response.get_json()["description"] == "Lunch"
-    assert response.get_json()["user_id"] == user1_id
+    assert response.get_json()["user_id"] == 1
 
 
 def test_get_expenses(client):
-    test_client, user1_id, user2_id = client
-    login_as(test_client, user1_id)
+    test_client, token1, token2 = client
 
-    create_test_expense(test_client)
+    create_test_expense(test_client, token1)
 
-    response = test_client.get("/expenses")
+    response = test_client.get(
+        "/expenses",
+        headers=auth_headers(token1)
+    )
 
     assert response.status_code == 200
     assert len(response.get_json()["expenses"]) == 1
 
 
 def test_update_expense(client):
-    test_client, user1_id, user2_id = client
-    login_as(test_client, user1_id)
+    test_client, token1, token2 = client
 
-    create_response = create_test_expense(test_client)
+    create_response = create_test_expense(test_client, token1)
     expense_id = create_response.get_json()["id"]
 
     response = test_client.patch(
         f"/expenses/{expense_id}",
-        json={"amount": 750}
+        json={"amount": 750},
+        headers=auth_headers(token1)
     )
 
     assert response.status_code == 200
@@ -106,69 +113,81 @@ def test_update_expense(client):
 
 
 def test_delete_expense(client):
-    test_client, user1_id, user2_id = client
-    login_as(test_client, user1_id)
+    test_client, token1, token2 = client
 
-    create_response = create_test_expense(test_client)
+    create_response = create_test_expense(test_client, token1)
     expense_id = create_response.get_json()["id"]
 
-    response = test_client.delete(f"/expenses/{expense_id}")
+    response = test_client.delete(
+        f"/expenses/{expense_id}",
+        headers=auth_headers(token1)
+    )
 
     assert response.status_code == 200
 
-    get_response = test_client.get(f"/expenses/{expense_id}")
+    get_response = test_client.get(
+        f"/expenses/{expense_id}",
+        headers=auth_headers(token1)
+    )
+
     assert get_response.status_code == 404
 
 
 def test_user_cannot_access_another_users_expense(client):
-    test_client, user1_id, user2_id = client
-    login_as(test_client, user1_id)
+    test_client, token1, token2 = client
 
-    create_response = create_test_expense(test_client)
+    create_response = create_test_expense(test_client, token1)
     expense_id = create_response.get_json()["id"]
 
-    login_as(test_client, user2_id)
-
-    response = test_client.get(f"/expenses/{expense_id}")
+    response = test_client.get(
+        f"/expenses/{expense_id}",
+        headers=auth_headers(token2)
+    )
 
     assert response.status_code == 404
 
 
 def test_create_expense_with_invalid_amount(client):
-    test_client, user1_id, user2_id = client
-    login_as(test_client, user1_id)
+    test_client, token1, token2 = client
 
-    response = test_client.post("/expenses", json={
-        "description": "Lunch",
-        "amount": -500,
-        "category": "Food",
-        "date": "2026-11-01"
-    })
+    response = test_client.post(
+        "/expenses",
+        json={
+            "description": "Lunch",
+            "amount": -500,
+            "category": "Food",
+            "date": "2026-11-01"
+        },
+        headers=auth_headers(token1)
+    )
 
     assert response.status_code == 400
 
 
 def test_create_expense_with_missing_fields(client):
-    test_client, user1_id, user2_id = client
-    login_as(test_client, user1_id)
+    test_client, token1, token2 = client
 
-    response = test_client.post("/expenses", json={
-        "description": "Lunch",
-        "amount": 500
-    })
+    response = test_client.post(
+        "/expenses",
+        json={
+            "description": "Lunch",
+            "amount": 500
+        },
+        headers=auth_headers(token1)
+    )
 
     assert response.status_code == 400
 
 
 def test_user_cannot_delete_another_users_expense(client):
-    test_client, user1_id, user2_id = client
-    login_as(test_client, user1_id)
+    test_client, token1, token2 = client
 
-    create_response = create_test_expense(test_client)
+    create_response = create_test_expense(test_client, token1)
     expense_id = create_response.get_json()["id"]
 
-    login_as(test_client, user2_id)
-
-    response = test_client.delete(f"/expenses/{expense_id}")
+    response = test_client.delete(
+        f"/expenses/{expense_id}",
+        headers=auth_headers(token2)
+    )
 
     assert response.status_code == 404

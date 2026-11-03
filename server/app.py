@@ -1,4 +1,5 @@
 
+
 from flask import Flask, jsonify
 from flask_migrate import Migrate
 from flask_restful import Api
@@ -8,6 +9,7 @@ from models import db
 from resources.auth import Signup, Login, Logout, CheckSession
 from resources.expense import expense_bp
 
+
 app = Flask(__name__)
 app.config.from_object(Config)
 
@@ -16,11 +18,13 @@ migrate = Migrate(app, db)
 
 api = Api(app)
 
+# Authentication routes
 api.add_resource(Signup, "/signup")
 api.add_resource(Login, "/login")
 api.add_resource(Logout, "/logout")
 api.add_resource(CheckSession, "/check_session")
 
+# Expense routes
 app.register_blueprint(expense_bp)
 
 

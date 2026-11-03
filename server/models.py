@@ -1,5 +1,5 @@
 # models.py
-import datetime
+from datetime import datetime,timezone
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -14,7 +14,7 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     _password_hash = db.Column(db.String(128), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc))
 
     # One-to-Many Relationship with Cascade Delete
     expenses = db.relationship(
@@ -58,7 +58,7 @@ class Expense(db.Model):
     title = db.Column(db.String(120), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     category = db.Column(db.String(50), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow, nullable=False)
+    timestamp = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), nullable=False)
 
     # Foreign key referencing User table
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)

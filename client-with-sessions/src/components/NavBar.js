@@ -1,15 +1,29 @@
-import React from "react";
+
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import styled from "styled-components";
 import { Button } from "../styles";
 
 function NavBar({ user, setUser }) {
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   function handleLogoutClick() {
-    fetch("/logout", { method: "DELETE" }).then((r) => {
-      if (r.ok) {
-        setUser(null);
-      }
-    });
+    setIsLoggingOut(true);
+
+    fetch("/logout", { method: "DELETE" })
+      .then((response) => {
+        if (response.ok) {
+          setUser(null);
+        } else {
+          alert("Logout failed. Please try again.");
+        }
+      })
+      .catch(() => {
+        alert("Unable to connect to the server.");
+      })
+      .finally(() => {
+        setIsLoggingOut(false);
+      });
   }
 
   return (
@@ -17,12 +31,16 @@ function NavBar({ user, setUser }) {
       <Logo>
         <Link to="/">My App</Link>
       </Logo>
+
       <Nav>
-        <Button>
-          Do Something
-        </Button>
-        <Button variant="outline" onClick={handleLogoutClick}>
-          Logout
+        <Button>Do Something</Button>
+
+        <Button
+          variant="outline"
+          onClick={handleLogoutClick}
+          disabled={isLoggingOut}
+        >
+          {isLoggingOut ? "Logging out..." : "Logout"}
         </Button>
       </Nav>
     </Wrapper>

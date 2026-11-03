@@ -1,19 +1,40 @@
+
 import React, { useEffect, useState } from "react";
 import NavBar from "./NavBar";
 import Login from "../pages/Login";
 
 function App() {
   const [user, setUser] = useState(null);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    fetch("/check_session").then((r) => {
-      if (r.ok) {
-        r.json().then((user) => setUser(user));
-      }
-    });
+    fetch("/check_session")
+      .then((response) => {
+        if (!response.ok) {
+          return null;
+        }
+        return response.json();
+      })
+      .then((userData) => {
+        if (userData) {
+          setUser(userData);
+        }
+      })
+      .catch((error) => {
+        console.error("Session check failed:", error);
+      })
+      .finally(() => {
+        setCheckingSession(false);
+      });
   }, []);
 
-  if (!user) return <Login onLogin={setUser} />;
+  if (checkingSession) {
+    return <p>Checking your session...</p>;
+  }
+
+  if (!user) {
+    return <Login onLogin={setUser} />;
+  }
 
   return (
     <>
@@ -26,3 +47,4 @@ function App() {
 }
 
 export default App;
+

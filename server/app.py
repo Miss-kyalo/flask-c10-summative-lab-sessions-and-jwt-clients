@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify
 from flask_migrate import Migrate
 from flask_restful import Api
@@ -33,4 +34,8 @@ def home():
 
 
 if __name__ == "__main__":
-    app.run(port=5555, debug=True)
+    debug_mode = os.environ.get("FLASK_DEBUG", "").strip().lower() in {
+        "true",
+        "1",
+    }
+    app.run(port=5555, debug=debug_mode)

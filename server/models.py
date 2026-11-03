@@ -38,6 +38,15 @@ class User(db.Model):
         """Validates a plain-text password against the stored bcrypt hash."""
         return bcrypt.check_password_hash(self._password_hash, raw_password)
 
+    def to_dict(self):
+        return{
+            'id':self.id,
+            'username': self.username,
+            'email':self.email,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+    
+    
     def __repr__(self):
         return f"<User {self.username}>"
 
@@ -54,5 +63,15 @@ class Expense(db.Model):
     # Foreign key referencing User table
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
 
+    def to_dict(self):
+        return{
+             'id':self.id,
+             'title': self.title,
+             'amount': self.amount,
+             'category':self.category,
+             'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+             'user_id':self.user_id
+        }
+    
     def __repr__(self):
         return f"<Expense {self.title} - ${self.amount}>"

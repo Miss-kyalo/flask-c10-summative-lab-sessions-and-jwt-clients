@@ -4,7 +4,7 @@ A robust, secure, and production-ready RESTful API built with Flask, Flask-RESTf
 **Features**
 User Authentication: Secure signup, login, logout, and session verification using flask-bcrypt for password hashing and Flask sessions.
 
-Expense Management: Full CRUD operations (Create, Read, Update, Delete) restricted to the authenticated user.
+Expense Management: Full CRUD operations (Create, Read, Update, Delete) restricted to the authenticated user. Currency amounts are limited to two decimal places, and timestamps are stored/returned in UTC.
 
 Robust Validation: Strict input checking (sanitizing strings, validating decimal precision for currency amounts, checking unknown fields, and ISO datetime validation).
 
@@ -19,3 +19,7 @@ Database: SQLite (default) / SQLAlchemy ORM
 
 Utilities: Faker (for seeding).
 
+**Configuration**
+Set `SECRET_KEY` before starting the API. `SESSION_COOKIE_SECURE` defaults to `true`; set it to `false` only for local development over plain HTTP. Secure cookies should remain enabled when deployed behind HTTPS.
+
+Existing databases must be migrated when changing the expense amount column from floating point to fixed precision. `db.create_all()` does not alter existing tables.

@@ -13,15 +13,15 @@ function NavBar({ user, setUser }) {
     fetch("/logout", { method: "DELETE" })
       .then((response) => {
         if (response.ok) {
+          setIsLoggingOut(false);
           setUser(null);
         } else {
           alert("Logout failed. Please try again.");
+          setIsLoggingOut(false);
         }
       })
       .catch(() => {
         alert("Unable to connect to the server.");
-      })
-      .finally(() => {
         setIsLoggingOut(false);
       });
   }

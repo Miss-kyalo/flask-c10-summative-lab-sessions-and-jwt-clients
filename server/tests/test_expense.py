@@ -72,6 +72,22 @@ def test_unauthenticated_user_cannot_access_expenses(client):
     assert response.status_code == 401
 
 
+def test_stale_session_cannot_create_expense(client):
+    test_client, user1_id, user2_id = client
+    login_as(test_client, 99999)
+
+    response = test_client.post(
+        "/expenses",
+        json={
+            "title": "Orphan",
+            "amount": 10,
+            "category": "Other"
+        }
+    )
+
+    assert response.status_code == 401
+
+
 def test_create_expense(client):
     test_client, user1_id, user2_id = client
     response = create_test_expense(test_client, user1_id)
@@ -142,6 +158,42 @@ def test_create_expense_with_invalid_amount(client):
     )
 
     assert response.status_code == 400
+
+
+def test_create_expense_rejects_fractional_cents(client):
+    test_client, user1_id, user2_id = client
+    login_as(test_client, user1_id)
+
+    response = test_client.post(
+        "/expenses",
+        json={
+            "title": "Precise amount",
+            "amount": "1.234",
+            "category": "Other"
+        }
+    )
+
+    assert response.status_code == 400
+    assert "2 decimal places" in response.get_json()["error"]
+
+
+def test_create_expense_preserves_timezone_in_utc(client):
+    test_client, user1_id, user2_id = client
+    login_as(test_client, user1_id)
+
+    response = test_client.post(
+        "/expenses",
+        json={
+            "title": "Offset time",
+            "amount": "1.23",
+            "category": "Other",
+            "timestamp": "2026-01-01T12:00:00+05:00"
+        }
+    )
+
+    assert response.status_code == 201
+    assert response.get_json()["timestamp"] == "2026-01-01T07:00:00+00:00"
+    assert response.get_json()["amount"] == 1.23
 
 
 def test_create_expense_with_missing_fields(client):

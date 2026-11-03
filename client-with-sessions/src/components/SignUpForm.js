@@ -35,15 +35,15 @@ function SignUpForm({ onLogin }) {
       .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         if (ok) {
+          setIsLoading(false);
           onLogin(data.user);
         } else {
           setErrors([data.error || "Signup failed. Please try again."]);
+          setIsLoading(false);
         }
       })
       .catch(() => {
         setErrors(["Unable to connect to the server."]);
-      })
-      .finally(() => {
         setIsLoading(false);
       });
   }
@@ -116,4 +116,3 @@ function SignUpForm({ onLogin }) {
 }
 
 export default SignUpForm;
-

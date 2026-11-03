@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request, session
 
-from models import db, Expense
+from models import db, Expense, User, utc_isoformat
 
 
 expense_bp = Blueprint("expenses", __name__)
@@ -13,19 +13,25 @@ def get_logged_in_user_id():
     user_id = session.get("user_id")
 
     try:
-        return int(user_id)
+        user_id = int(user_id)
     except (TypeError, ValueError):
         return None
+
+    if db.session.get(User, user_id) is None:
+        session.clear()
+        return None
+
+    return user_id
 
 
 def expense_to_dict(expense):
     return {
         "id": expense.id,
         "title": expense.title,
-        "amount": expense.amount,
+        "amount": float(expense.amount),
         "category": expense.category,
         "timestamp": (
-            expense.timestamp.isoformat()
+            utc_isoformat(expense.timestamp)
             if expense.timestamp else None
         ),
         "user_id": expense.user_id
@@ -85,7 +91,10 @@ def validate_expense_data(data, partial=False):
             if amount >= 100000000:
                 return None, "Amount is too large."
 
-            validated["amount"] = float(amount)
+            if amount != amount.quantize(Decimal("0.01")):
+                return None, "Amount must have at most 2 decimal places."
+
+            validated["amount"] = amount
 
         except (InvalidOperation, ValueError, TypeError):
             return None, "Amount must be a valid number."
@@ -95,9 +104,12 @@ def validate_expense_data(data, partial=False):
             return None, "Timestamp must be a valid date and time."
 
         try:
-            validated["timestamp"] = datetime.fromisoformat(
-                data["timestamp"]
-            )
+            timestamp = datetime.fromisoformat(data["timestamp"])
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
+            else:
+                timestamp = timestamp.astimezone(timezone.utc)
+            validated["timestamp"] = timestamp
         except ValueError:
             return None, "Invalid timestamp format."
 
@@ -167,7 +179,7 @@ def create_expense():
         amount=validated["amount"],
         category=validated["category"],
         user_id=user_id,
-        timestamp=validated.get("timestamp", datetime.utcnow())
+        timestamp=validated.get("timestamp", datetime.now(timezone.utc))
     )
 
     try:

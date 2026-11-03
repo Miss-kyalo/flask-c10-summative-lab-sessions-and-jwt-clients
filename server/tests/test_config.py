@@ -7,6 +7,24 @@ from pathlib import Path
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
 
+def test_session_cookie_security_defaults():
+    from config import Config
+
+    assert Config.SESSION_COOKIE_SECURE is True
+    assert Config.SESSION_COOKIE_HTTPONLY is True
+    assert Config.SESSION_COOKIE_SAMESITE == "Lax"
+
+
+def test_session_cookie_security_flag_parses_explicit_values(monkeypatch):
+    from config import environment_flag
+
+    monkeypatch.setenv("TEST_COOKIE_FLAG", "false")
+    assert environment_flag("TEST_COOKIE_FLAG", True) is False
+
+    monkeypatch.setenv("TEST_COOKIE_FLAG", "yes")
+    assert environment_flag("TEST_COOKIE_FLAG", False) is True
+
+
 def test_missing_secret_key_fails_fast():
     environment = os.environ.copy()
     environment.pop("SECRET_KEY", None)

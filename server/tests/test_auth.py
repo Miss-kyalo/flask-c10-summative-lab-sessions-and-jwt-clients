@@ -41,6 +41,9 @@ def test_signup(client):
     )
 
     assert response.status_code == 201
+    assert "Secure" in response.headers["Set-Cookie"]
+    assert "HttpOnly" in response.headers["Set-Cookie"]
+    assert "SameSite=Lax" in response.headers["Set-Cookie"]
     assert response.get_json()["user"]["username"] == "siraj"
 
 
@@ -77,6 +80,45 @@ def test_signup_short_password(client):
     )
 
     assert response.status_code == 422
+
+
+def test_signup_rejects_password_over_bcrypt_byte_limit(client):
+    response = client.post(
+        "/signup",
+        json={
+            "username": "long_password",
+            "email": "long-password@example.com",
+            "password": "p" * 73
+        }
+    )
+
+    assert response.status_code == 422
+    assert "72 UTF-8 bytes" in response.get_json()["error"]
+
+
+def test_signup_accepts_password_within_bcrypt_byte_limit(client):
+    response = client.post(
+        "/signup",
+        json={
+            "username": "max_password",
+            "email": "max-password@example.com",
+            "password": "p" * 72
+        }
+    )
+
+    assert response.status_code == 201
+
+
+def test_login_rejects_password_over_bcrypt_byte_limit(client):
+    response = client.post(
+        "/login",
+        json={
+            "email": "nobody@example.com",
+            "password": "p" * 73
+        }
+    )
+
+    assert response.status_code == 401
 
 
 def test_login(client):

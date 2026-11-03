@@ -4,6 +4,16 @@ from flask_restful import Resource
 from models import db, User
 
 
+MAX_BCRYPT_PASSWORD_BYTES = 72
+
+
+def password_is_supported(password):
+    try:
+        return len(password.encode("utf-8")) <= MAX_BCRYPT_PASSWORD_BYTES
+    except UnicodeEncodeError:
+        return False
+
+
 class Signup(Resource):
     def post(self):
         data = request.get_json(silent=True) or {}
@@ -23,6 +33,9 @@ class Signup(Resource):
 
         if len(password) < 8:
             return {"error": "Password must be at least 8 characters"}, 422
+
+        if not password_is_supported(password):
+            return {"error": "Password must be at most 72 UTF-8 bytes"}, 422
 
         existing_user = User.query.filter(
             (User.username == username) | (User.email == email)
@@ -68,6 +81,9 @@ class Login(Resource):
 
         if not email or not password:
             return {"error": "Email and password are required"}, 422
+
+        if not password_is_supported(password):
+            return {"error": "Invalid email or password"}, 401
 
         user = User.query.filter_by(email=email).first()
 

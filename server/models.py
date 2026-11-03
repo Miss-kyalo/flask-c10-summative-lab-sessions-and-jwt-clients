@@ -9,6 +9,14 @@ db = SQLAlchemy()
 bcrypt = Bcrypt()
 
 
+def utc_isoformat(value):
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=datetime.timezone.utc)
+    else:
+        value = value.astimezone(datetime.timezone.utc)
+    return value.isoformat()
+
+
 class User(db.Model):
     __tablename__ = "users"
 
@@ -18,8 +26,8 @@ class User(db.Model):
     _password_hash = db.Column(db.String(128), nullable=False)
 
     created_at = db.Column(
-        db.DateTime,
-        default=datetime.datetime.utcnow
+        db.DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
 
     expenses = db.relationship(
@@ -50,7 +58,7 @@ class User(db.Model):
             "username": self.username,
             "email": self.email,
             "created_at": (
-                self.created_at.isoformat()
+                utc_isoformat(self.created_at)
                 if self.created_at else None
             )
         }
@@ -64,12 +72,12 @@ class Expense(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(120), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
     category = db.Column(db.String(50), nullable=False)
 
     timestamp = db.Column(
-        db.DateTime,
-        default=datetime.datetime.utcnow,
+        db.DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
         nullable=False
     )
 
@@ -83,10 +91,10 @@ class Expense(db.Model):
         return {
             "id": self.id,
             "title": self.title,
-            "amount": self.amount,
+            "amount": float(self.amount) if self.amount is not None else None,
             "category": self.category,
             "timestamp": (
-                self.timestamp.isoformat()
+                utc_isoformat(self.timestamp)
                 if self.timestamp else None
             ),
             "user_id": self.user_id

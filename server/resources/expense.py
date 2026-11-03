@@ -3,8 +3,7 @@
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask import Blueprint, jsonify, request, session
 
 from models import db, Expense
 
@@ -22,15 +21,13 @@ def expense_to_dict(expense):
         "user_id": expense.user_id
     }
 
-
 def get_logged_in_user_id():
-    identity = get_jwt_identity()
+    user_id = session.get("user_id")
 
     try:
-        return int(identity)
+        return int(user_id)
     except (TypeError, ValueError):
         return None
-
 
 def get_owned_expense(expense_id, user_id):
     return Expense.query.filter_by(
@@ -111,7 +108,6 @@ def validate_expense_data(data, partial=False):
 
 
 @expense_bp.route("/expenses", methods=["GET"])
-@jwt_required()
 def get_expenses():
     user_id = get_logged_in_user_id()
 
@@ -162,7 +158,6 @@ def get_expenses():
 
 
 @expense_bp.route("/expenses", methods=["POST"])
-@jwt_required()
 def create_expense():
     user_id = get_logged_in_user_id()
 
@@ -195,7 +190,7 @@ def create_expense():
 
 
 @expense_bp.route("/expenses/<int:expense_id>", methods=["GET"])
-@jwt_required()
+
 def get_expense(expense_id):
     user_id = get_logged_in_user_id()
 
@@ -211,7 +206,7 @@ def get_expense(expense_id):
 
 
 @expense_bp.route("/expenses/<int:expense_id>", methods=["PATCH"])
-@jwt_required()
+
 def update_expense(expense_id):
     user_id = get_logged_in_user_id()
 
@@ -242,7 +237,7 @@ def update_expense(expense_id):
 
 
 @expense_bp.route("/expenses/<int:expense_id>", methods=["DELETE"])
-@jwt_required()
+
 def delete_expense(expense_id):
     user_id = get_logged_in_user_id()
 

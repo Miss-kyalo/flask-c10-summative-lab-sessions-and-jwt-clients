@@ -1,27 +1,32 @@
-# models.py
-from datetime import datetime,timezone
+import datetime
+
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from sqlalchemy.ext.hybrid import hybrid_property
 
+
 db = SQLAlchemy()
 bcrypt = Bcrypt()
 
+
 class User(db.Model):
-    __tablename__ = 'users'
+    __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     _password_hash = db.Column(db.String(128), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc))
 
-    # One-to-Many Relationship with Cascade Delete
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow
+    )
+
     expenses = db.relationship(
-        'Expense',
-        backref='user',
+        "Expense",
+        backref="user",
         lazy=True,
-        cascade='all, delete-orphan'
+        cascade="all, delete-orphan"
     )
 
     @hybrid_property
@@ -30,48 +35,62 @@ class User(db.Model):
 
     @password_hash.setter
     def password_hash(self, raw_password):
-        """Hashes raw password text using Flask-Bcrypt before storing."""
         hashed_bytes = bcrypt.generate_password_hash(raw_password)
-        self._password_hash = hashed_bytes.decode('utf-8')
+        self._password_hash = hashed_bytes.decode("utf-8")
 
     def authenticate(self, raw_password):
-        """Validates a plain-text password against the stored bcrypt hash."""
-        return bcrypt.check_password_hash(self._password_hash, raw_password)
+        return bcrypt.check_password_hash(
+            self._password_hash,
+            raw_password
+        )
 
     def to_dict(self):
-        return{
-            'id':self.id,
-            'username': self.username,
-            'email':self.email,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+        return {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "created_at": (
+                self.created_at.isoformat()
+                if self.created_at else None
+            )
         }
-    
-    
+
     def __repr__(self):
         return f"<User {self.username}>"
 
 
 class Expense(db.Model):
-    __tablename__ = 'expenses'
+    __tablename__ = "expenses"
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(120), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     category = db.Column(db.String(50), nullable=False)
-    timestamp = db.Column(db.DateTime, default=lambda:datetime.now(timezone.utc), nullable=False)
 
-    # Foreign key referencing User table
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    timestamp = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        nullable=False
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
 
     def to_dict(self):
-        return{
-             'id':self.id,
-             'title': self.title,
-             'amount': self.amount,
-             'category':self.category,
-             'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-             'user_id':self.user_id
+        return {
+            "id": self.id,
+            "title": self.title,
+            "amount": self.amount,
+            "category": self.category,
+            "timestamp": (
+                self.timestamp.isoformat()
+                if self.timestamp else None
+            ),
+            "user_id": self.user_id
         }
-    
+
     def __repr__(self):
         return f"<Expense {self.title} - ${self.amount}>"

@@ -1,6 +1,4 @@
-
-
-from datetime import date
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request, session
@@ -11,16 +9,6 @@ from models import db, Expense
 expense_bp = Blueprint("expenses", __name__)
 
 
-def expense_to_dict(expense):
-    return {
-        "id": expense.id,
-        "description": expense.description,
-        "amount": str(expense.amount),
-        "category": expense.category,
-        "date": expense.date.isoformat(),
-        "user_id": expense.user_id
-    }
-
 def get_logged_in_user_id():
     user_id = session.get("user_id")
 
@@ -28,6 +16,21 @@ def get_logged_in_user_id():
         return int(user_id)
     except (TypeError, ValueError):
         return None
+
+
+def expense_to_dict(expense):
+    return {
+        "id": expense.id,
+        "title": expense.title,
+        "amount": expense.amount,
+        "category": expense.category,
+        "timestamp": (
+            expense.timestamp.isoformat()
+            if expense.timestamp else None
+        ),
+        "user_id": expense.user_id
+    }
+
 
 def get_owned_expense(expense_id, user_id):
     return Expense.query.filter_by(
@@ -40,7 +43,7 @@ def validate_expense_data(data, partial=False):
     if not isinstance(data, dict):
         return None, "Request body must be a JSON object."
 
-    allowed_fields = {"description", "amount", "category", "date"}
+    allowed_fields = {"title", "amount", "category", "timestamp"}
 
     if not data:
         return None, "Please provide expense details."
@@ -50,7 +53,7 @@ def validate_expense_data(data, partial=False):
     if unknown_fields:
         return None, "Unknown fields: " + ", ".join(sorted(unknown_fields))
 
-    required_fields = {"description", "amount", "category", "date"}
+    required_fields = {"title", "amount", "category"}
 
     if not partial:
         missing_fields = required_fields - set(data.keys())
@@ -60,49 +63,43 @@ def validate_expense_data(data, partial=False):
 
     validated = {}
 
-    if "description" in data:
-        description = data["description"]
+    if "title" in data:
+        if not isinstance(data["title"], str) or not data["title"].strip():
+            return None, "Title must be a non-empty string."
 
-        if not isinstance(description, str) or not description.strip():
-            return None, "Description must be a non-empty string."
-
-        validated["description"] = description.strip()
+        validated["title"] = data["title"].strip()
 
     if "category" in data:
-        category = data["category"]
-
-        if not isinstance(category, str) or not category.strip():
+        if not isinstance(data["category"], str) or not data["category"].strip():
             return None, "Category must be a non-empty string."
 
-        validated["category"] = category.strip()
+        validated["category"] = data["category"].strip()
 
     if "amount" in data:
         try:
             amount = Decimal(str(data["amount"]))
 
             if not amount.is_finite() or amount <= 0:
-                return None, "Amount must be a positive number."
+                return None, "Amount must be greater than zero."
 
-            if amount.as_tuple().exponent < -2:
-                return None, "Amount can have at most two decimal places."
-
-            if amount >= Decimal("100000000"):
+            if amount >= 100000000:
                 return None, "Amount is too large."
+
+            validated["amount"] = float(amount)
 
         except (InvalidOperation, ValueError, TypeError):
             return None, "Amount must be a valid number."
 
-        validated["amount"] = amount
+    if "timestamp" in data:
+        if not isinstance(data["timestamp"], str):
+            return None, "Timestamp must be a valid date and time."
 
-    if "date" in data:
         try:
-            if not isinstance(data["date"], str):
-                raise ValueError
-
-            validated["date"] = date.fromisoformat(data["date"])
-
-        except (ValueError, TypeError):
-            return None, "Date must use YYYY-MM-DD format."
+            validated["timestamp"] = datetime.fromisoformat(
+                data["timestamp"]
+            )
+        except ValueError:
+            return None, "Invalid timestamp format."
 
     return validated, None
 
@@ -112,49 +109,44 @@ def get_expenses():
     user_id = get_logged_in_user_id()
 
     if user_id is None:
-        return jsonify({"error": "Invalid user identity."}), 401
+        return jsonify({"error": "Unauthorized"}), 401
 
     try:
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 10, type=int)
-
-        if page < 1 or per_page < 1:
-            return jsonify({
-                "error": "Page and per_page must be positive."
-            }), 400
-
-        if per_page > 100:
-            return jsonify({
-                "error": "per_page cannot exceed 100."
-            }), 400
-
-        pagination = (
-            Expense.query.filter_by(user_id=user_id)
-            .order_by(Expense.date.desc(), Expense.id.desc())
-            .paginate(
-                page=page,
-                per_page=per_page,
-                error_out=False
-            )
-        )
-
+        page = int(request.args.get("page", 1))
+        per_page = int(request.args.get("per_page", 10))
+    except ValueError:
         return jsonify({
-            "expenses": [
-                expense_to_dict(expense)
-                for expense in pagination.items
-            ],
-            "pagination": {
-                "page": pagination.page,
-                "per_page": pagination.per_page,
-                "total": pagination.total,
-                "pages": pagination.pages,
-                "has_next": pagination.has_next,
-                "has_prev": pagination.has_prev
-            }
-        }), 200
+            "error": "Page and per_page must be integers."
+        }), 400
 
-    except (ValueError, TypeError):
-        return jsonify({"error": "Invalid pagination values."}), 400
+    if page < 1 or per_page < 1:
+        return jsonify({
+            "error": "Page and per_page must be at least 1."
+        }), 400
+
+    per_page = min(per_page, 100)
+
+    pagination = (
+        Expense.query.filter_by(user_id=user_id)
+        .order_by(Expense.timestamp.desc(), Expense.id.desc())
+        .paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+    )
+
+    return jsonify({
+        "items": [
+            expense_to_dict(expense)
+            for expense in pagination.items
+        ],
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages,
+        "has_next": pagination.has_next,
+        "has_prev": pagination.has_prev
+    }), 200
 
 
 @expense_bp.route("/expenses", methods=["POST"])
@@ -162,7 +154,7 @@ def create_expense():
     user_id = get_logged_in_user_id()
 
     if user_id is None:
-        return jsonify({"error": "Invalid user identity."}), 401
+        return jsonify({"error": "Unauthorized"}), 401
 
     data = request.get_json(silent=True)
     validated, error = validate_expense_data(data)
@@ -171,51 +163,48 @@ def create_expense():
         return jsonify({"error": error}), 400
 
     expense = Expense(
-        description=validated["description"],
+        title=validated["title"],
         amount=validated["amount"],
         category=validated["category"],
-        date=validated["date"],
-        user_id=user_id
+        user_id=user_id,
+        timestamp=validated.get("timestamp", datetime.utcnow())
     )
 
     try:
         db.session.add(expense)
         db.session.commit()
-
-        return jsonify(expense_to_dict(expense)), 201
-
     except Exception:
         db.session.rollback()
-        return jsonify({"error": "Could not create the expense."}), 500
+        return jsonify({"error": "Could not create expense."}), 500
+
+    return jsonify(expense_to_dict(expense)), 201
 
 
 @expense_bp.route("/expenses/<int:expense_id>", methods=["GET"])
-
 def get_expense(expense_id):
     user_id = get_logged_in_user_id()
 
     if user_id is None:
-        return jsonify({"error": "Invalid user identity."}), 401
+        return jsonify({"error": "Unauthorized"}), 401
 
     expense = get_owned_expense(expense_id, user_id)
 
-    if expense is None:
+    if not expense:
         return jsonify({"error": "Expense not found."}), 404
 
     return jsonify(expense_to_dict(expense)), 200
 
 
 @expense_bp.route("/expenses/<int:expense_id>", methods=["PATCH"])
-
 def update_expense(expense_id):
     user_id = get_logged_in_user_id()
 
     if user_id is None:
-        return jsonify({"error": "Invalid user identity."}), 401
+        return jsonify({"error": "Unauthorized"}), 401
 
     expense = get_owned_expense(expense_id, user_id)
 
-    if expense is None:
+    if not expense:
         return jsonify({"error": "Expense not found."}), 404
 
     data = request.get_json(silent=True)
@@ -229,34 +218,32 @@ def update_expense(expense_id):
 
     try:
         db.session.commit()
-        return jsonify(expense_to_dict(expense)), 200
-
     except Exception:
         db.session.rollback()
-        return jsonify({"error": "Could not update the expense."}), 500
+        return jsonify({"error": "Could not update expense."}), 500
+
+    return jsonify(expense_to_dict(expense)), 200
 
 
 @expense_bp.route("/expenses/<int:expense_id>", methods=["DELETE"])
-
 def delete_expense(expense_id):
     user_id = get_logged_in_user_id()
 
     if user_id is None:
-        return jsonify({"error": "Invalid user identity."}), 401
+        return jsonify({"error": "Unauthorized"}), 401
 
     expense = get_owned_expense(expense_id, user_id)
 
-    if expense is None:
+    if not expense:
         return jsonify({"error": "Expense not found."}), 404
 
     try:
         db.session.delete(expense)
         db.session.commit()
-
-        return jsonify({
-            "message": "Expense deleted successfully."
-        }), 200
-
     except Exception:
         db.session.rollback()
-        return jsonify({"error": "Could not delete the expense."}), 500
+        return jsonify({"error": "Could not delete expense."}), 500
+
+    return jsonify({
+        "message": "Expense deleted successfully."
+    }), 200

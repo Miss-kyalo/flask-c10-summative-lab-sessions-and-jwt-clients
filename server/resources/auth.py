@@ -1,7 +1,5 @@
-
 from flask import request, session
 from flask_restful import Resource
-from werkzeug.security import generate_password_hash, check_password_hash
 
 from models import db, User
 
@@ -21,7 +19,7 @@ class Signup(Resource):
         email = email.strip().lower()
 
         if not username or not email:
-            return {"error": "Invalid registration information"}, 422
+            return {"error": "Username and email cannot be empty"}, 422
 
         if len(password) < 8:
             return {"error": "Password must be at least 8 characters"}, 422
@@ -33,13 +31,13 @@ class Signup(Resource):
         if existing_user:
             return {"error": "Username or email already exists"}, 422
 
-        hashed_password = generate_password_hash(password)
-
         new_user = User(
             username=username,
-            email=email,
-            password_hash=hashed_password
+            email=email
         )
+
+        # The model hashes the password through this setter.
+        new_user.password_hash = password
 
         try:
             db.session.add(new_user)
@@ -50,11 +48,7 @@ class Signup(Resource):
 
         return {
             "message": "Account created successfully",
-            "user": {
-                "id": new_user.id,
-                "username": new_user.username,
-                "email": new_user.email
-            }
+            "user": new_user.to_dict()
         }, 201
 
 
@@ -75,7 +69,7 @@ class Login(Resource):
 
         user = User.query.filter_by(email=email).first()
 
-        if not user or not check_password_hash(user.password_hash, password):
+        if not user or not user.authenticate(password):
             return {"error": "Invalid email or password"}, 401
 
         session.clear()
@@ -83,18 +77,17 @@ class Login(Resource):
 
         return {
             "message": "Login successful",
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email
-            }
+            "user": user.to_dict()
         }, 200
 
 
 class Logout(Resource):
     def delete(self):
         session.clear()
-        return {"message": "Logout successful"}, 200
+
+        return {
+            "message": "Logout successful"
+        }, 200
 
 
 class CheckSession(Resource):
@@ -110,10 +103,4 @@ class CheckSession(Resource):
             session.clear()
             return {"error": "Unauthorized"}, 401
 
-        return {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email
-        }, 200
-
-
+        return user.to_dict(), 200

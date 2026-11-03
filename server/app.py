@@ -1,9 +1,10 @@
 from flask import Flask, jsonify
 from flask_migrate import Migrate
-from flask_jwt_extended import JWTManager
+from flask_restful import Api
 
 from config import Config
-from models import db
+from models import db, bcrypt
+from resources.auth import Signup, Login, Logout, CheckSession
 from resources.expense import expense_bp
 
 
@@ -11,9 +12,15 @@ app = Flask(__name__)
 app.config.from_object(Config)
 
 db.init_app(app)
+bcrypt.init_app(app)
 
-jwt = JWTManager(app)
 migrate = Migrate(app, db)
+api = Api(app)
+
+api.add_resource(Signup, "/signup")
+api.add_resource(Login, "/login")
+api.add_resource(Logout, "/logout")
+api.add_resource(CheckSession, "/check_session")
 
 app.register_blueprint(expense_bp)
 

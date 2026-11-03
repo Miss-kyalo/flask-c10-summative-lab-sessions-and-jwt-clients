@@ -8,7 +8,6 @@ from models import db
 from resources.auth import Signup, Login, Logout, CheckSession
 from resources.expense import expense_bp
 
-
 app = Flask(__name__)
 app.config.from_object(Config)
 

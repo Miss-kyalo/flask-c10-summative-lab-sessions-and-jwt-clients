@@ -42,6 +42,8 @@ class Signup(Resource):
         try:
             db.session.add(new_user)
             db.session.commit()
+            session.clear()
+            session["user_id"] = new_user.id
         except Exception:
             db.session.rollback()
             return {"error": "Could not create account"}, 500

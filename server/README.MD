@@ -23,3 +23,11 @@ Utilities: Faker (for seeding).
 Set `SECRET_KEY` before starting the API. `SESSION_COOKIE_SECURE` defaults to `true`; set it to `false` only for local development over plain HTTP. Secure cookies should remain enabled when deployed behind HTTPS.
 
 Existing databases must be migrated when changing the expense amount column from floating point to fixed precision. `db.create_all()` does not alter existing tables.
+
+
+Members:
+GIFT MUTUA
+LYNN KYALO
+BARAKA MOGERE
+MOHAMMED SIRAJ
+ANTHONY THUO

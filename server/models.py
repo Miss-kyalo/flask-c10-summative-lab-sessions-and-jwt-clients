@@ -1,15 +1,14 @@
 import datetime
-
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
-from sqlalchemy.ext.hybrid import hybrid_property
-
 
 db = SQLAlchemy()
 bcrypt = Bcrypt()
 
 
 def utc_isoformat(value):
+    if value is None:
+        return None
     if value.tzinfo is None:
         value = value.replace(tzinfo=datetime.timezone.utc)
     else:
@@ -21,13 +20,14 @@ class User(db.Model):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     _password_hash = db.Column(db.String(128), nullable=False)
 
     created_at = db.Column(
         db.DateTime(timezone=True),
-        default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False
     )
 
     expenses = db.relationship(
@@ -37,7 +37,7 @@ class User(db.Model):
         cascade="all, delete-orphan"
     )
 
-    @hybrid_property
+    @property
     def password_hash(self):
         raise AttributeError("Password hash is not a readable attribute.")
 
@@ -57,10 +57,7 @@ class User(db.Model):
             "id": self.id,
             "username": self.username,
             "email": self.email,
-            "created_at": (
-                utc_isoformat(self.created_at)
-                if self.created_at else None
-            )
+            "created_at": utc_isoformat(self.created_at) if self.created_at else None
         }
 
     def __repr__(self):
@@ -69,6 +66,10 @@ class User(db.Model):
 
 class Expense(db.Model):
     __tablename__ = "expenses"
+
+    __table_args__ = (
+        db.Index("idx_expense_user_timestamp", "user_id", "timestamp"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(120), nullable=False)
@@ -91,14 +92,11 @@ class Expense(db.Model):
         return {
             "id": self.id,
             "title": self.title,
-            "amount": float(self.amount) if self.amount is not None else None,
+            "amount": str(self.amount) if self.amount is not None else None,
             "category": self.category,
-            "timestamp": (
-                utc_isoformat(self.timestamp)
-                if self.timestamp else None
-            ),
+            "timestamp": utc_isoformat(self.timestamp) if self.timestamp else None,
             "user_id": self.user_id
         }
 
     def __repr__(self):
-        return f"<Expense {self.title} - ${self.amount}>"
+        return f"<Expense {self.title} ${self.amount}>"

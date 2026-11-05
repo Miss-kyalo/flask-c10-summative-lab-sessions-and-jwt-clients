@@ -2,9 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request, session
-
 from models import db, Expense, User, utc_isoformat
-
 
 expense_bp = Blueprint("expenses", __name__)
 
@@ -28,12 +26,9 @@ def expense_to_dict(expense):
     return {
         "id": expense.id,
         "title": expense.title,
-        "amount": float(expense.amount),
+        "amount": str(expense.amount),
         "category": expense.category,
-        "timestamp": (
-            utc_isoformat(expense.timestamp)
-            if expense.timestamp else None
-        ),
+        "timestamp": utc_isoformat(expense.timestamp) if expense.timestamp else None,
         "user_id": expense.user_id
     }
 
@@ -55,15 +50,12 @@ def validate_expense_data(data, partial=False):
         return None, "Please provide expense details."
 
     unknown_fields = set(data.keys()) - allowed_fields
-
     if unknown_fields:
         return None, "Unknown fields: " + ", ".join(sorted(unknown_fields))
 
     required_fields = {"title", "amount", "category"}
-
     if not partial:
         missing_fields = required_fields - set(data.keys())
-
         if missing_fields:
             return None, "Missing fields: " + ", ".join(sorted(missing_fields))
 
@@ -72,14 +64,18 @@ def validate_expense_data(data, partial=False):
     if "title" in data:
         if not isinstance(data["title"], str) or not data["title"].strip():
             return None, "Title must be a non-empty string."
-
-        validated["title"] = data["title"].strip()
+        title = data["title"].strip()
+        if len(title) > 120:
+            return None, "Title cannot exceed 120 characters."
+        validated["title"] = title
 
     if "category" in data:
         if not isinstance(data["category"], str) or not data["category"].strip():
             return None, "Category must be a non-empty string."
-
-        validated["category"] = data["category"].strip()
+        category = data["category"].strip()
+        if len(category) > 50:
+            return None, "Category cannot exceed 50 characters."
+        validated["category"] = category
 
     if "amount" in data:
         try:
@@ -88,10 +84,10 @@ def validate_expense_data(data, partial=False):
             if not amount.is_finite() or amount <= 0:
                 return None, "Amount must be greater than zero."
 
-            if amount >= 100000000:
+            if amount >= Decimal("100000000"):
                 return None, "Amount is too large."
 
-            if amount != amount.quantize(Decimal("0.01")):
+            if amount.as_tuple().exponent < -2:
                 return None, "Amount must have at most 2 decimal places."
 
             validated["amount"] = amount
@@ -104,7 +100,8 @@ def validate_expense_data(data, partial=False):
             return None, "Timestamp must be a valid date and time."
 
         try:
-            timestamp = datetime.fromisoformat(data["timestamp"])
+            raw_ts = data["timestamp"].replace("Z", "+00:00")
+            timestamp = datetime.fromisoformat(raw_ts)
             if timestamp.tzinfo is None:
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
             else:
@@ -119,7 +116,6 @@ def validate_expense_data(data, partial=False):
 @expense_bp.route("/expenses", methods=["GET"])
 def get_expenses():
     user_id = get_logged_in_user_id()
-
     if user_id is None:
         return jsonify({"error": "Unauthorized"}), 401
 
@@ -127,32 +123,21 @@ def get_expenses():
         page = int(request.args.get("page", 1))
         per_page = int(request.args.get("per_page", 10))
     except ValueError:
-        return jsonify({
-            "error": "Page and per_page must be integers."
-        }), 400
+        return jsonify({"error": "Page and per_page must be integers."}), 400
 
     if page < 1 or per_page < 1:
-        return jsonify({
-            "error": "Page and per_page must be at least 1."
-        }), 400
+        return jsonify({"error": "Page and per_page must be at least 1."}), 400
 
     per_page = min(per_page, 100)
 
     pagination = (
         Expense.query.filter_by(user_id=user_id)
         .order_by(Expense.timestamp.desc(), Expense.id.desc())
-        .paginate(
-            page=page,
-            per_page=per_page,
-            error_out=False
-        )
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
 
     return jsonify({
-        "items": [
-            expense_to_dict(expense)
-            for expense in pagination.items
-        ],
+        "items": [expense_to_dict(exp) for exp in pagination.items],
         "total": pagination.total,
         "page": pagination.page,
         "pages": pagination.pages,
@@ -164,13 +149,11 @@ def get_expenses():
 @expense_bp.route("/expenses", methods=["POST"])
 def create_expense():
     user_id = get_logged_in_user_id()
-
     if user_id is None:
         return jsonify({"error": "Unauthorized"}), 401
 
     data = request.get_json(silent=True)
     validated, error = validate_expense_data(data)
-
     if error:
         return jsonify({"error": error}), 400
 
@@ -195,12 +178,10 @@ def create_expense():
 @expense_bp.route("/expenses/<int:expense_id>", methods=["GET"])
 def get_expense(expense_id):
     user_id = get_logged_in_user_id()
-
     if user_id is None:
         return jsonify({"error": "Unauthorized"}), 401
 
     expense = get_owned_expense(expense_id, user_id)
-
     if not expense:
         return jsonify({"error": "Expense not found."}), 404
 
@@ -210,18 +191,15 @@ def get_expense(expense_id):
 @expense_bp.route("/expenses/<int:expense_id>", methods=["PATCH"])
 def update_expense(expense_id):
     user_id = get_logged_in_user_id()
-
     if user_id is None:
         return jsonify({"error": "Unauthorized"}), 401
 
     expense = get_owned_expense(expense_id, user_id)
-
     if not expense:
         return jsonify({"error": "Expense not found."}), 404
 
     data = request.get_json(silent=True)
     validated, error = validate_expense_data(data, partial=True)
-
     if error:
         return jsonify({"error": error}), 400
 
@@ -240,12 +218,10 @@ def update_expense(expense_id):
 @expense_bp.route("/expenses/<int:expense_id>", methods=["DELETE"])
 def delete_expense(expense_id):
     user_id = get_logged_in_user_id()
-
     if user_id is None:
         return jsonify({"error": "Unauthorized"}), 401
 
     expense = get_owned_expense(expense_id, user_id)
-
     if not expense:
         return jsonify({"error": "Expense not found."}), 404
 
@@ -256,6 +232,4 @@ def delete_expense(expense_id):
         db.session.rollback()
         return jsonify({"error": "Could not delete expense."}), 500
 
-    return jsonify({
-        "message": "Expense deleted successfully."
-    }), 200
+    return jsonify({"message": "Expense deleted successfully."}), 200

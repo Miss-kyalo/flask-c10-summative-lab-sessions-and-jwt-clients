@@ -1,16 +1,17 @@
+import re
+from sqlalchemy.exc import IntegrityError
 from flask import request, session
 from flask_restful import Resource
-
 from models import db, User
 
-
 MAX_BCRYPT_PASSWORD_BYTES = 72
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def password_is_supported(password):
     try:
         return len(password.encode("utf-8")) <= MAX_BCRYPT_PASSWORD_BYTES
-    except UnicodeEncodeError:
+    except (UnicodeEncodeError, AttributeError):
         return False
 
 
@@ -23,13 +24,19 @@ class Signup(Resource):
         password = data.get("password")
 
         if not isinstance(username, str) or not isinstance(email, str) or not isinstance(password, str):
-            return {"error": "Username, email and password are required"}, 422
+            return {"error": "Username, email, and password are required"}, 422
 
         username = username.strip()
         email = email.strip().lower()
 
         if not username or not email:
             return {"error": "Username and email cannot be empty"}, 422
+
+        if len(username) > 80 or len(email) > 120:
+            return {"error": "Username or email exceeds maximum length"}, 422
+
+        if not EMAIL_REGEX.match(email):
+            return {"error": "Invalid email address format"}, 422
 
         if len(password) < 8:
             return {"error": "Password must be at least 8 characters"}, 422
@@ -48,18 +55,20 @@ class Signup(Resource):
             username=username,
             email=email
         )
-
-        # The model hashes the password through this setter.
         new_user.password_hash = password
 
         try:
             db.session.add(new_user)
             db.session.commit()
-            session.clear()
-            session["user_id"] = new_user.id
+        except IntegrityError:
+            db.session.rollback()
+            return {"error": "Username or email already exists"}, 422
         except Exception:
             db.session.rollback()
             return {"error": "Could not create account"}, 500
+
+        session.clear()
+        session["user_id"] = new_user.id
 
         return {
             "message": "Account created successfully",
@@ -102,10 +111,7 @@ class Login(Resource):
 class Logout(Resource):
     def delete(self):
         session.clear()
-
-        return {
-            "message": "Logout successful"
-        }, 200
+        return {"message": "Logout successful"}, 200
 
 
 class CheckSession(Resource):

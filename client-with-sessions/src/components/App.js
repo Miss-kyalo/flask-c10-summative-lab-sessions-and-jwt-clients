@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import NavBar from "./NavBar";
 import Login from "../pages/Login";
+import Expenses from "./Expenses";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -41,6 +42,7 @@ function App() {
       <NavBar user={user} setUser={setUser} />
       <main>
         <p>You are logged in!</p>
+        <Expenses />
       </main>
     </>
   );

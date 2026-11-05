@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import App from "../App";
 
+jest.mock("../Expenses", () => () => null);
+
 function jsonResponse(data, ok = true) {
   return Promise.resolve({
     ok,

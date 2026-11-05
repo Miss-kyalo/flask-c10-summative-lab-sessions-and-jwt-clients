@@ -117,7 +117,7 @@ def test_update_expense(client):
     )
 
     assert response.status_code == 200
-    assert response.get_json()["amount"] == 750.0
+    assert response.get_json()["amount"] == "750.00"
 
 
 def test_delete_expense(client):
@@ -193,7 +193,7 @@ def test_create_expense_preserves_timezone_in_utc(client):
 
     assert response.status_code == 201
     assert response.get_json()["timestamp"] == "2026-01-01T07:00:00+00:00"
-    assert response.get_json()["amount"] == 1.23
+    assert response.get_json()["amount"] == "1.23"
 
 
 def test_create_expense_with_missing_fields(client):
